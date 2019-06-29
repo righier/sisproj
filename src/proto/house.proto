@@ -1,0 +1,22 @@
+
+syntax = "proto3";
+package proto;
+
+option java_package = "proto";
+option java_outer_classname = "HouseProto";
+
+message Hello {
+	string id = 1;
+}
+
+message Goodbye {
+}
+
+message Measure {
+	double value = 1;
+	int64 timestamp = 2;
+}
+
+message LastSync {
+	int64 timestamp = 1;
+}

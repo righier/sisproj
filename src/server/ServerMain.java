@@ -1,6 +1,7 @@
 package server;
 
 import java.io.IOException;
+import java.net.BindException;
 
 import com.sun.jersey.api.container.httpserver.HttpServerFactory;
 import com.sun.net.httpserver.HttpServer;
@@ -10,7 +11,7 @@ public class ServerMain {
 	public static void main(String args[]) {
 
 		String host = "localhost";
-		int port = 1337;
+		int port = 8000;
 		String addr = "http://" + host + ":" + port + "/";
 
 		try {
@@ -24,6 +25,8 @@ public class ServerMain {
 		} catch (IllegalArgumentException e) {
 			System.err.println("Invalid hostname");
 			e.printStackTrace();
+		} catch (BindException e) {
+			System.err.println("Port already in use");
 		} catch (IOException e) {
 
 			e.printStackTrace();
