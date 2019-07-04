@@ -28,9 +28,7 @@ public class HousesService {
 	@Consumes({ "application/json" })
 	@Produces({ "application/json" })
 	public Response addHouse(House house) {
-		System.out.println("WTF");
 		List<House> list = Houses.addAndGetList(house);
-		System.out.println("adding "+house.getId()+" "+list==null);
 		if (list != null) {
 			return Response.ok(list).build();
 		} else {

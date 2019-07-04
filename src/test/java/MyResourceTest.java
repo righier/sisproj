@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import house.CasaMain;
+import house.HouseManager;
 import server.ServerMain;
 
 import static org.junit.Assert.assertEquals;
@@ -13,46 +14,57 @@ import static org.junit.Assert.assertTrue;
 
 public class MyResourceTest {
 
+	private static final String addr = "http://localhost:8000";
 	private HttpServer server;
 
 	@Before
 	public void setUp() throws Exception {
-		// start the server
+
 		server = ServerMain.startServer();
 		System.out.println("Server started");
 
-
-//		 c.configuration().enable(new org.glassfish.jersey.media.json.JsonJaxbFeature());
 	}
 
 	@After
 	public void tearDown() throws Exception {
 		server.stop();
 	}
+	
+	@Test 
+	public void boostTest() throws Exception {
+		HouseManager m1 = CasaMain.init("a", addr, 0, false);
+		HouseManager m2 = CasaMain.init("b", addr, 0, false);
+		HouseManager m3 = CasaMain.init("c", addr, 0, false);
+		HouseManager m4 = CasaMain.init("d", addr, 0, false);
+		
+		Thread.sleep(500);
+		
+		m1.boost();
+		Thread.sleep(200);
+		m2.boost();
+		m3.boost();
+		Thread.sleep(100);
+		m4.boost();
+		
+		Thread.sleep(6000);
+	}
 
-	/**
-	 * Test to see that the message "Got it!" is sent in the response.
-	 */
-	@Test
-	public void testGetIt() {
-		for (int i = 0; i < 10; i++) {
+//	@Test
+	public void stressTest() {
+		for (int i = 0; i < 50; i++) {
 			new Thread(() -> {
 				System.out.println("starting house n "+Thread.currentThread().getId());
-				CasaMain.main(null);
+
+				CasaMain.init(CasaMain.randomId(), addr, 0, true);
 			}).start();
 			
 		}
-		
-		while(true) {
-		try {
-			synchronized(this) {
-				wait();
+			
+			try {
+				Thread.sleep(5000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
-		} catch (InterruptedException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-		}
-
 	}
 }

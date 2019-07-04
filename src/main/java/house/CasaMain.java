@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Scanner;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
@@ -27,20 +28,17 @@ public class CasaMain {
 		}
 		return builder.toString();
 	}
-
-	public static void main(String args[]) {
-
-		String id = randomId();
-		String serverAddr = "http://localhost:8000/";
-
-		ClientPool.init(serverAddr);
+	
+	public static HouseManager init(String id, String addr, int port, boolean simulator) {
+		
+		ClientPool.init(addr);
 
 		HouseManager houseManager;
 		try {
-			houseManager = new HouseManager(id);
+			houseManager = new HouseManager(id, port);
 		} catch (IOException e1) {
 			e1.printStackTrace();
-			return;
+			return null;
 		}
 
 		House house = new House(id, "localhost", houseManager.getPort());
@@ -51,15 +49,14 @@ public class CasaMain {
 			.request(MediaType.APPLICATION_JSON)
 			.put(Entity.entity(house, MediaType.APPLICATION_JSON));
 		ClientPool.add(client);
-		
-		System.out.println("I AM "+id+" status "+response.getStatus());
 
 		int status = response.getStatus();
 		if (status == 200) {
 			List<House> houses = response.readEntity(new GenericType<List<House>>() {});
-			Collections.sort(houses);
+			Collections.sort(houses, Collections.reverseOrder());
 
-
+			// Quando entro nella rete voglio presentarmi con tutti
+			// In ordine decrescente, così l'ultimo con cui parlo è il capo
 			for (House h: houses) {
 				if (h.getId().equals(id)) continue;
 
@@ -68,28 +65,51 @@ public class CasaMain {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
-			}
 
+			}
 
 			houseManager.setReady(true);
 		}
 
-		System.out.println(id+" my port is "+house.getPort());
-
 		SmartMeterBuffer buffer = new SmartMeterBuffer(houseManager);
 		SmartMeterSimulator meter = new SmartMeterSimulator(id, (Buffer) buffer);
-		meter.start();
+		
+		if (simulator) {
+			meter.start();
+		}
+		
+		houseManager.setSimultor(meter);
 
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			meter.stopMeGently();
 			System.out.println(id+" exit");
+			System.exit(0);
 		}));
+		
+		return houseManager;
+	}
 
-		while (true) {
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+	public static void main(String args[]) {
+
+		HouseManager manager = init(CasaMain.randomId(), "http://localhost:8000", 0, true);
+
+		boolean running = true;
+		Scanner in = new Scanner(System.in);
+		while (running) {
+			System.out.print("Type a command:");
+			String s = in.next();
+			
+			switch(s) {
+			
+			case "exit":
+				running = false;
+				manager.stop();
+				break;
+
+			case "boost":
+				manager.boost();
+				break;
+
 			}
 		}
 	}

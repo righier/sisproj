@@ -47,4 +47,12 @@ public class Measurement implements Comparable<Measurement> {
 	public String toString() {
 		return "id "+id+", value "+value+", timestamp "+timestamp;
 	}
+	
+	public Measure toProtobuf() {
+		return Measure.newBuilder()
+				.setId(id)
+				.setValue(value)
+				.setTimestamp(timestamp)
+				.build();
+	}
 }

@@ -9,7 +9,23 @@ message Hello {
 	string id = 1;
 }
 
+message Welcome {
+}
+
 message Goodbye {
+}
+
+message AskBoost {
+	int64 timestamp = 1;
+}
+
+message GrantBoost {
+}
+
+message DenyBoost {
+}
+
+message EndBoost {
 }
 
 message Measure {
