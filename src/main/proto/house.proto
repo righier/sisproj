@@ -18,6 +18,12 @@ service HouseService {
 	
 	// updates the values of all the outdated measurements
 	rpc SetMeasurements(stream Measure) returns (Empty) {};
+	
+	// ask for boost token
+	rpc AskBoost(BoostRequest) returns (BoostResponse) {};
+	
+	// ends boost for the identifier node
+	rpc EndBoost(Identifier) returns (Empty) {};
 }
 
 message Empty {}
@@ -32,6 +38,23 @@ message Identifier {
 	string id = 1;
 }
 
+message BoostRequest {
+	string id = 1;
+	int64 timestamp = 2;
+}
+
+message BoostResponse {
+	string id = 1;
+	
+	enum BoostResponseType {
+		UNKNOWN = 0;
+		GRANT = 1;
+		DENY = 2;
+	}
+	BoostResponseType type = 2;
+
+}
+
 message Measure {
 	string id = 1;
 	double value = 2;
@@ -41,8 +64,20 @@ message Measure {
 
 // deprecated
 
+message Welcome {}
+
 message Goodbye {}
 
 message MeasureList {
 	repeated Measure measures = 1;
 }
+
+message AskBoost {
+	int64 timestamp = 1;
+}
+
+message GrantBoost {}
+
+message DenyBoost {}
+
+message EndBoost {}

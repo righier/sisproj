@@ -6,8 +6,10 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
@@ -17,27 +19,44 @@ import javax.ws.rs.core.Response;
 import com.google.protobuf.Any;
 
 import beans.Measurement;
+import proto.HouseProto.AskBoost;
+import proto.HouseProto.EndBoost;
 import proto.HouseProto.Goodbye;
 import proto.HouseProto.Measure;
 import proto.HouseProto.MeasureList;
+import simulator.SmartMeterSimulator;
 import utils.Async;
 import utils.ClientPool;
 
 public class HouseManager {
 
-	private Map<String, HouseConnection> connections = new HashMap<String, HouseConnection>();
-	private Map<String, Measurement> measures = new HashMap<String, Measurement>();
+	private Map<String, HouseConnection> connections = new HashMap<>();
+	private Map<String, Measurement> measures = new HashMap<>();
 
-	private int houseCount;
-	private int measureCount;
+	private int houseCount = 1;
+	private int measureCount = 0;
 
 	private String localId;
 	private String master;
 
-	private boolean ready;
+	private boolean ready = false;
 
 	private ServerSocket socket;
 	private int port;
+
+	public static final int BOOST_INACTIVE = 0;
+	public static final int BOOST_REQUESTED = 2;
+	public static final int BOOST_ACTIVE = 3;
+
+	private int boost = 0;
+	private long boostTimestamp = 0;
+	
+	private Map<String, Boolean> boostStatus;
+	private Set<String> pendingBoost;
+	private int currentBoostCount;
+	
+	
+	private SmartMeterSimulator sim;
 
 	public HouseManager(String localId) throws IOException {
 		this(localId, 0);
@@ -45,13 +64,9 @@ public class HouseManager {
 
 	public HouseManager(String localId, int port) throws IOException {
 		this.localId = localId;
+		this.master = localId;
 
 		measures.put(localId, new Measurement(localId, Double.NaN, 0));
-		master = localId;
-		houseCount = 1;
-		measureCount = 0;
-
-		ready = false;
 
 		startWait(port);
 	}
@@ -60,6 +75,7 @@ public class HouseManager {
 		socket = new ServerSocket(port);
 		this.port = socket.getLocalPort();
 		System.out.println("Listening on " + this.port);
+
 		Async.run(() -> {
 			while(true) {
 				try {
@@ -71,6 +87,10 @@ public class HouseManager {
 			}
 		});
 
+	}
+	
+	public void setSimultor(SmartMeterSimulator sim) {
+		this.sim = sim;
 	}
 
 	public void addMeasurement(Measurement m) {
@@ -100,7 +120,11 @@ public class HouseManager {
 
 	public synchronized void add(HouseConnection house) {
 		connections.put(house.getId(), house);
-		measures.put(house.getId(), new Measurement(house.getId(), Double.NaN, 0));
+		
+		if (!measures.containsKey(house.getId())) {
+			measures.put(house.getId(), new Measurement(house.getId(), Double.NaN, 0));
+		}
+
 		if (house.getId().compareTo(localId) < 0) {
 			master = house.getId();
 		}
@@ -109,6 +133,8 @@ public class HouseManager {
 
 	public synchronized void remove(String id) {
 		assert (measures.containsKey(id));
+		
+		setBoost(id, false);
 
 		Measurement m = measures.get(id);
 		if (!Double.isNaN(m.getValue())) {
@@ -131,10 +157,14 @@ public class HouseManager {
 	}
 
 	public synchronized void update(Measurement m) {
-		assert (measures.containsKey(m.getId()));
 
-		Measurement old = measures.get(m.getId());
-		int delta = Double.isNaN(old.getValue()) ? 1 : -1;
+		Measurement old = new Measurement(m.getId(), Double.NaN, 0);
+		int delta = 1;
+
+		if (measures.containsKey(m.getId())) {
+			old = measures.get(m.getId());
+			delta = Double.isNaN(old.getValue()) ? 1 : -1;
+		}
 
 		if (old.compareTo(m) < 0) {
 			measures.put(m.getId(), m);
@@ -153,8 +183,6 @@ public class HouseManager {
 
 		if (ready && isMaster() && houseCount == measureCount) {
 
-			System.out.println("sum "+localId);
-
 			double value = 0;
 			long timestamp = 0;
 			int count = 0;
@@ -172,9 +200,7 @@ public class HouseManager {
 				Measurement m2 = new Measurement(m.getId(), Double.NaN, m.getTimestamp());
 				measures.put(m2.getId(), m2);
 
-				Measure measure = Measure.newBuilder().setId(m2.getId()).setValue(m2.getValue())
-						.setTimestamp(m2.getTimestamp()).build();
-				listBuilder.addMeasures(measure);
+				listBuilder.addMeasures(m2.toProtobuf());
 			}
 			measureCount = 0;
 
@@ -202,6 +228,8 @@ public class HouseManager {
 	}
 
 	public synchronized void stop() {
+		
+		sim.stopMeGently();
 
 		Client client = ClientPool.get();
 		Response response = client.target(ClientPool.getUrl())
@@ -241,5 +269,89 @@ public class HouseManager {
 
 	public int getPort() {
 		return port;
+	}
+	
+	public synchronized long getBoostTimestamp() {
+		return boostTimestamp;
+	}
+
+	public synchronized boolean isBoostActive() {
+		return boost == BOOST_ACTIVE;
+	}
+
+	public synchronized int getBoostStatus() {
+		return boost;
+	}
+
+	public synchronized void boost() {
+		if (boost > BOOST_INACTIVE) return;
+
+		System.out.println("I AM "+localId+" I WANT BOOST");
+		
+		boost = BOOST_REQUESTED;
+		boostTimestamp = System.currentTimeMillis();
+		
+		pendingBoost = new HashSet<>(connections.keySet());
+		boostStatus = new HashMap<>();
+		
+		for (HouseConnection conn: connections.values()) {
+			boostStatus.put(conn.getId(), false);
+			conn.write(
+				Any.pack(AskBoost.newBuilder()
+					.setTimestamp(boostTimestamp)
+					.build()
+				)
+			);
+		}
+		
+	}
+	
+	public synchronized void canBoost() {
+		assert(boost == BOOST_REQUESTED);
+		
+		if (!pendingBoost.isEmpty()) return;
+		
+		int count = 0;
+		for (Boolean active: boostStatus.values()) {
+			if (active) count++;
+		}
+		
+		if (count < 2) {
+			boost = BOOST_ACTIVE;
+			
+			Async.run(() -> {
+				try {
+					System.out.println("I AM "+localId+" BOOOOOST");
+					sim.boost();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+				
+				System.out.println("I AM "+localId+" END BOOST :(");
+				stopBoost();
+			});
+			
+		}  else {
+			System.out.println("I AM "+localId+" too much boost "+count);
+		}
+	}
+	
+	public synchronized void stopBoost() {
+		assert(boost == BOOST_ACTIVE);
+		
+		boost = BOOST_INACTIVE;
+		
+		for (HouseConnection conn: connections.values()) {
+			conn.write(Any.pack(EndBoost.newBuilder().build()));
+		}
+	}
+	
+	public synchronized void setBoost(String id, boolean val) {
+		if (boost != BOOST_REQUESTED) return;
+
+		pendingBoost.remove(id);
+		boostStatus.put(id, val);
+		
+		canBoost();
 	}
 }
