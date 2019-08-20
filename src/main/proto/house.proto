@@ -5,11 +5,31 @@ package proto;
 option java_package = "proto";
 option java_outer_classname = "HouseProto";
 
-message Hello {
-	string id = 1;
+service HouseService {
+
+	// called when a new node joins, returns the known measurements for every node
+	rpc JoinNetwork(Hello) returns (stream Measure) {};
+	
+	// the identifier matches the node leaving the network
+	rpc LeaveNetwork(Identifier) returns (Empty) {};
+	
+	// the node becomes the new master of the network
+	rpc NewMaster(Identifier) returns (Empty) {};
+	
+	// updates the values of all the outdated measurements
+	rpc SetMeasurements(stream Measure) returns (Empty) {};
 }
 
-message Goodbye {
+message Empty {}
+
+message Hello {
+	string id = 1;
+	string address = 2;
+	int32 port = 3;
+}
+
+message Identifier {
+	string id = 1;
 }
 
 message Measure {
@@ -17,6 +37,11 @@ message Measure {
 	double value = 2;
 	int64 timestamp = 3;
 }
+
+
+// deprecated
+
+message Goodbye {}
 
 message MeasureList {
 	repeated Measure measures = 1;
