@@ -28,9 +28,9 @@ public class CasaMain {
 		}
 		return builder.toString();
 	}
-	
+
 	public static HouseManager init(String id, String addr, int port, boolean simulator) {
-		
+
 		ClientPool.init(addr);
 
 		HouseManager houseManager;
@@ -73,11 +73,11 @@ public class CasaMain {
 
 		SmartMeterBuffer buffer = new SmartMeterBuffer(houseManager);
 		SmartMeterSimulator meter = new SmartMeterSimulator(id, (Buffer) buffer);
-		
+
 		if (simulator) {
 			meter.start();
 		}
-		
+
 		houseManager.setSimultor(meter);
 
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -85,7 +85,7 @@ public class CasaMain {
 			System.out.println(id+" exit");
 			System.exit(0);
 		}));
-		
+
 		return houseManager;
 	}
 
@@ -98,9 +98,9 @@ public class CasaMain {
 		while (running) {
 			System.out.print("Type a command:");
 			String s = in.next();
-			
+
 			switch(s) {
-			
+
 			case "exit":
 				running = false;
 				manager.stop();
@@ -112,5 +112,6 @@ public class CasaMain {
 
 			}
 		}
+		in.close();
 	}
 }

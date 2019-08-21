@@ -1,5 +1,5 @@
+*.zip
 
-*.class
-.settings
-target
-bin
+.settings/
+target/
+workspace/

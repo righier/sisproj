@@ -8,6 +8,11 @@ import proto.HouseProto.Measure;
 import proto.HouseServiceGrpc.HouseServiceImplBase;
 
 public class ServiceProvider extends HouseServiceImplBase {
+	private final HouseManager manager;
+	
+	public ServiceProvider(HouseManager manager) {
+		this.manager = manager;
+	}
 	
 	@Override
 	public void joinNetwork(Hello request, StreamObserver<Measure> response) {
