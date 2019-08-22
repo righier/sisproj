@@ -10,7 +10,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Response;
 
-import beans.IntegerCount;
 import beans.Measurement;
 import server.Houses;
 
@@ -46,6 +45,6 @@ public class StatsService {
 	public Response addMeasurements(List<Measurement> measurements) {
 		int count = Houses.addMeasurements(measurements);
 		System.out.println("adding measure: "+measurements.get(0)+" count: "+count);
-		return Response.ok(new IntegerCount(count)).build();
+		return Response.ok().build();
 	}
 }

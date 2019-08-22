@@ -36,5 +36,9 @@ public class BlockingStack<T> {
 		
 		return list.remove(list.size() - 1);
 	}
+	
+	public synchronized int size() {
+		return list.size();
+	}
 
 }

@@ -1,9 +1,12 @@
 package house2;
 
 import io.grpc.stub.StreamObserver;
+import proto.HouseProto.BoostRequest;
+import proto.HouseProto.BoostResponse;
 import proto.HouseProto.Empty;
 import proto.HouseProto.Hello;
 import proto.HouseProto.Identifier;
+import proto.HouseProto.MasterResponse;
 import proto.HouseProto.Measure;
 import proto.HouseServiceGrpc.HouseServiceImplBase;
 
@@ -32,7 +35,7 @@ public class ServiceProvider extends HouseServiceImplBase {
 	}
 	
 	@Override
-	public void newMaster(Identifier request, StreamObserver<Empty> responseObserver) {
+	public void newMaster(Empty request, StreamObserver<MasterResponse> responseObserver) {
 		// TODO Auto-generated method stub
 		super.newMaster(request, responseObserver);
 	}
@@ -41,6 +44,18 @@ public class ServiceProvider extends HouseServiceImplBase {
 	public StreamObserver<Measure> setMeasurements(StreamObserver<Empty> responseObserver) {
 		// TODO Auto-generated method stub
 		return super.setMeasurements(responseObserver);
+	}
+	
+	@Override
+	public void askBoost(BoostRequest request, StreamObserver<BoostResponse> responseObserver) {
+		// TODO Auto-generated method stub
+		super.askBoost(request, responseObserver);
+	}
+	
+	@Override
+	public void endBoost(Identifier request, StreamObserver<Empty> responseObserver) {
+		// TODO Auto-generated method stub
+		super.endBoost(request, responseObserver);
 	}
 	
 }
