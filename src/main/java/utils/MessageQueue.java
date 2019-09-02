@@ -16,7 +16,7 @@ public class MessageQueue {
 
 	public MessageQueue(OutputStream out) {
 		this.out = out;
-		Async.run(() -> {
+		new Thread(() -> {
 			while(running) {
 				sendMessage();
 			}

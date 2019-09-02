@@ -25,7 +25,6 @@ import proto.HouseProto.Goodbye;
 import proto.HouseProto.Measure;
 import proto.HouseProto.MeasureList;
 import simulator.SmartMeterSimulator;
-import utils.Async;
 import utils.ClientPool;
 
 public class HouseManager {
@@ -50,12 +49,12 @@ public class HouseManager {
 
 	private int boost = 0;
 	private long boostTimestamp = 0;
-	
+
 	private Map<String, Boolean> boostStatus;
 	private Set<String> pendingBoost;
 	private int currentBoostCount;
-	
-	
+
+
 	private SmartMeterSimulator sim;
 
 	public HouseManager(String localId) throws IOException {
@@ -76,7 +75,7 @@ public class HouseManager {
 		this.port = socket.getLocalPort();
 		System.out.println("Listening on " + this.port);
 
-		Async.run(() -> {
+		new Thread(() -> {
 			while(true) {
 				try {
 					Socket conn = socket.accept();
@@ -88,7 +87,7 @@ public class HouseManager {
 		});
 
 	}
-	
+
 	public void setSimultor(SmartMeterSimulator sim) {
 		this.sim = sim;
 	}
@@ -106,7 +105,7 @@ public class HouseManager {
 			house.write(msg);
 		}
 
-		Async.run(() -> {
+		new Thread(() -> {
 			Client client = ClientPool.get();
 			Response response = client
 				.target(ClientPool.getUrl())
@@ -120,7 +119,7 @@ public class HouseManager {
 
 	public synchronized void add(HouseConnection house) {
 		connections.put(house.getId(), house);
-		
+
 		if (!measures.containsKey(house.getId())) {
 			measures.put(house.getId(), new Measurement(house.getId(), Double.NaN, 0));
 		}
@@ -133,7 +132,7 @@ public class HouseManager {
 
 	public synchronized void remove(String id) {
 		assert (measures.containsKey(id));
-		
+
 		setBoost(id, false);
 
 		Measurement m = measures.get(id);
@@ -209,7 +208,7 @@ public class HouseManager {
 			List<Measurement> total = Arrays.asList(new Measurement("", value, timestamp));
 
 			Any msg = Any.pack(listBuilder.build());
-			Async.run(() -> {
+			new Thread(() -> {
 
 				Client client = ClientPool.get();
 				Response response = client.target(ClientPool.getUrl())
@@ -228,7 +227,7 @@ public class HouseManager {
 	}
 
 	public synchronized void stop() {
-		
+
 		sim.stopMeGently();
 
 		Client client = ClientPool.get();
@@ -270,7 +269,7 @@ public class HouseManager {
 	public int getPort() {
 		return port;
 	}
-	
+
 	public synchronized long getBoostTimestamp() {
 		return boostTimestamp;
 	}
@@ -287,13 +286,13 @@ public class HouseManager {
 		if (boost > BOOST_INACTIVE) return;
 
 		System.out.println("I AM "+localId+" I WANT BOOST");
-		
+
 		boost = BOOST_REQUESTED;
 		boostTimestamp = System.currentTimeMillis();
-		
+
 		pendingBoost = new HashSet<>(connections.keySet());
 		boostStatus = new HashMap<>();
-		
+
 		for (HouseConnection conn: connections.values()) {
 			boostStatus.put(conn.getId(), false);
 			conn.write(
@@ -303,55 +302,55 @@ public class HouseManager {
 				)
 			);
 		}
-		
+
 	}
-	
+
 	public synchronized void canBoost() {
 		assert(boost == BOOST_REQUESTED);
-		
+
 		if (!pendingBoost.isEmpty()) return;
-		
+
 		int count = 0;
 		for (Boolean active: boostStatus.values()) {
 			if (active) count++;
 		}
-		
+
 		if (count < 2) {
 			boost = BOOST_ACTIVE;
-			
-			Async.run(() -> {
+
+			new Thread(() -> {
 				try {
 					System.out.println("I AM "+localId+" BOOOOOST");
 					sim.boost();
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-				
+
 				System.out.println("I AM "+localId+" END BOOST :(");
 				stopBoost();
 			});
-			
+
 		}  else {
 			System.out.println("I AM "+localId+" too much boost "+count);
 		}
 	}
-	
+
 	public synchronized void stopBoost() {
 		assert(boost == BOOST_ACTIVE);
-		
+
 		boost = BOOST_INACTIVE;
-		
+
 		for (HouseConnection conn: connections.values()) {
 			conn.write(Any.pack(EndBoost.newBuilder().build()));
 		}
 	}
-	
+
 	public synchronized void setBoost(String id, boolean val) {
 		if (boost != BOOST_REQUESTED) return;
 
 		pendingBoost.remove(id);
 		boostStatus.put(id, val);
-		
+
 		canBoost();
 	}
 }

@@ -47,7 +47,7 @@ public class CasaMain {
 		Response response = client.target(ClientPool.getUrl())
 			.path("houses/add")
 			.request(MediaType.APPLICATION_JSON)
-			.put(Entity.entity(house, MediaType.APPLICATION_JSON));
+			.post(Entity.entity(house, MediaType.APPLICATION_JSON));
 		ClientPool.add(client);
 
 		int status = response.getStatus();

@@ -27,7 +27,7 @@ public class SmartMeterBuffer implements Buffer {
 		if (--missing == 0) {
 			double avg = Arrays.stream(data).sum() / size;
 			long timestamp = m.getTimestamp();
-			manager.newLocalMeasurement(new beans.Measurement(manager.getLocalId(), avg, timestamp));
+			manager.newLocalMeasurement(new beans.Measurement(manager.getId(), avg, timestamp));
 			missing = overlap;
 		}
 	}

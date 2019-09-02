@@ -45,7 +45,7 @@ public class ApiTest {
 		
 		HashSet<String> ids = new HashSet<>();
 		
-		for (int i = 0; i < 10; i++) {
+		for (int i = 0; i < n; i++) {
 			String id;
 			do {
 				id = Generator.randomId();

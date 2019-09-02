@@ -2,6 +2,7 @@ package house2;
 
 import java.util.concurrent.TimeUnit;
 
+import beans.House;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import proto.HouseServiceGrpc;
@@ -21,10 +22,10 @@ public class HouseChannel {
 		blocking = HouseServiceGrpc.newBlockingStub(channel);
 	}
 	
-	public static HouseChannel create(String id, String ip, int port) {
-		return new HouseChannel(id, ip, port);
+	public HouseChannel(House h) {
+		this(h.getId(), h.getAddr(), h.getPort());
 	}
-	
+
 	public String getId() {
 		return id;
 	}

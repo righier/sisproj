@@ -78,7 +78,7 @@ public class HouseConnection implements Runnable {
 
 		this.queue = new MessageQueue(this.out);
 
-		Async.run(this);
+		new Thread(this);
 	}
 
 	public String getId() {

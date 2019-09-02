@@ -1,5 +1,6 @@
 package house2;
 
+import beans.Measurement;
 import io.grpc.stub.StreamObserver;
 import proto.HouseProto.BoostRequest;
 import proto.HouseProto.BoostResponse;
@@ -9,53 +10,55 @@ import proto.HouseProto.Identifier;
 import proto.HouseProto.MasterResponse;
 import proto.HouseProto.Measure;
 import proto.HouseServiceGrpc.HouseServiceImplBase;
+import utils.StreamHelper;
 
 public class ServiceProvider extends HouseServiceImplBase {
 	private final HouseManager manager;
-	
+
 	public ServiceProvider(HouseManager manager) {
 		this.manager = manager;
 	}
-	
+
 	@Override
 	public void joinNetwork(Hello request, StreamObserver<Measure> response) {
-		System.out.println("message Thread: "+Thread.currentThread().getId());
-		response.onNext(Measure.newBuilder()
-				.setId("alskdjf")
-				.setValue(23.23)
-				.setTimestamp(12345)
-				.build());
+		if (!manager.isStopping()) {
+			manager.addHouse(new HouseChannel(request.getId(), request.getAddress(), request.getPort()));
+			for (Measurement m: manager.getMeasurements()) {
+				response.onNext(m.toProtobuf());
+			}
+		}
 		response.onCompleted();
 	}
-	
+
 	@Override
-	public void leaveNetwork(Identifier request, StreamObserver<Empty> responseObserver) {
-		// TODO Auto-generated method stub
-		super.leaveNetwork(request, responseObserver);
+	public void leaveNetwork(Identifier request, StreamObserver<Empty> response) {
+		manager.removeHouse(request.getId());
+		response.onCompleted();
 	}
-	
+
 	@Override
-	public void newMaster(Empty request, StreamObserver<MasterResponse> responseObserver) {
-		// TODO Auto-generated method stub
-		super.newMaster(request, responseObserver);
+	public void newMaster(Empty request, StreamObserver<MasterResponse> response) {
+		boolean accept = !manager.isStopping();
+		manager.setMaster(accept);
+		response.onNext(MasterResponse.newBuilder().setAccept(accept).build());
+		response.onCompleted();
 	}
-	
+
 	@Override
-	public StreamObserver<Measure> setMeasurements(StreamObserver<Empty> responseObserver) {
-		// TODO Auto-generated method stub
-		return super.setMeasurements(responseObserver);
+	public StreamObserver<Measure> setMeasurements(StreamObserver<Empty> response) {
+		return StreamHelper.simple(manager::update, StreamHelper.logError, () -> response.onCompleted());
 	}
-	
+
 	@Override
-	public void askBoost(BoostRequest request, StreamObserver<BoostResponse> responseObserver) {
+	public void askBoost(BoostRequest request, StreamObserver<BoostResponse> response) {
 		// TODO Auto-generated method stub
-		super.askBoost(request, responseObserver);
+		super.askBoost(request, response);
 	}
-	
+
 	@Override
-	public void endBoost(Identifier request, StreamObserver<Empty> responseObserver) {
+	public void endBoost(Identifier request, StreamObserver<Empty> response) {
 		// TODO Auto-generated method stub
-		super.endBoost(request, responseObserver);
+		super.endBoost(request, response);
 	}
-	
+
 }

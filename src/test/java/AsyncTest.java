@@ -1,12 +1,13 @@
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 
 import org.junit.Test;
 
 import utils.Async;
-import utils.Async.Worker;
-import utils.Barrier;
+import utils.WorkerPool;
+import utils.WorkerPool.Worker;
 
 public class AsyncTest {
 
@@ -17,9 +18,16 @@ public class AsyncTest {
 		
 		final int n = 100;
 		
-		Barrier b = new Barrier();
+		ArrayList<Integer> nums = new ArrayList<>();
+		
 		for (int i = 0; i < n; i++) {
-			b.add(Async.run(() -> {
+			nums.add(new Integer(i));
+		}
+		
+		WorkerPool async = new WorkerPool(20);
+		
+		for (Integer i: nums) {
+			async.run(() -> {
 				assertTrue(Thread.currentThread() instanceof Worker);
 				synchronized(ids) {
 					
@@ -31,23 +39,25 @@ public class AsyncTest {
 							ids.wait();
 						} catch (InterruptedException e) {}
 					}
+					
 				}
-			}));
+			});
 		}
 		
-		
-		b.await();
+		async.waitAllIdle();
 		
 		// checks that no thread is used more than one time
 		assertTrue( ids.size() == n );
 		
 		for (int i = 0; i < n; i++) {
-			b.add(Async.run(() -> {
+			async.run(() -> {
 				
 				// checks that on the second run all the threads are being reused
 				assertTrue( ids.contains(Async.id()) );
-			}));
+			});
 		}
+		
+		async.waitAllIdle();
 		
 	}
 }
