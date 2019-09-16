@@ -37,15 +37,17 @@ public class Measurement implements Comparable<Measurement> {
 	
 	@Override
 	public int compareTo(Measurement o) {
-		int res = id.compareTo(o.id);
-		if (res != 0)
-			return res;
-		return Long.compare(timestamp, o.timestamp);
+		int res = Long.compare(timestamp, o.timestamp);
+		return res != 0 ? res : Double.isNaN(value) ? 1 : 0;
 	}
 	
 	@Override
 	public String toString() {
 		return "id "+id+", value "+value+", timestamp "+timestamp;
+	}
+	
+	public boolean isNan() {
+		return Double.isNaN(value);
 	}
 	
 	public Measure toProtobuf() {

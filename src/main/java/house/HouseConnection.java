@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,7 +12,6 @@ import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.MessageLite;
-import com.google.protobuf.Descriptors.FieldDescriptor;
 
 import beans.Measurement;
 import proto.HouseProto.*;
@@ -90,6 +90,7 @@ public class HouseConnection implements Runnable {
 	}
 
 	public void kill() {
+		if (!alive) return;
 		alive = false;
 		manager.remove(this.id);
 		
@@ -97,6 +98,9 @@ public class HouseConnection implements Runnable {
 		queue.waitEmpty();
 
 		try {
+			out.flush();
+			socket.shutdownOutput();
+			socket.shutdownInput();
 			socket.close();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -107,16 +111,17 @@ public class HouseConnection implements Runnable {
 	public void run() {
 
 		while (alive) {
-			Any msg;
+			Any msg = null;
 			try {
 				msg = Any.parseDelimitedFrom(in);
+			} catch (SocketException e) {
+				kill();
 			} catch (IOException e) {
 				e.printStackTrace();
-				continue;
+				kill();
 			}
-
-			FieldDescriptor field = msg.getDescriptorForType().findFieldByName("type_url");
-//			System.out.println(manager.getLocalId()+" from "+this.id+" "+msg.getField(field));
+			
+			if (!alive || msg == null) break;
 
 			try {
 				if (msg.is(Hello.class)) {
@@ -133,7 +138,7 @@ public class HouseConnection implements Runnable {
 					write(Any.pack(Welcome.newBuilder().build()));
 
 				} else if (msg.is(Goodbye.class)) {
-					manager.remove(id);
+					kill();
 
 				} else if (msg.is(MeasureList.class)) {
 					MeasureList list = msg.unpack(MeasureList.class);
@@ -189,17 +194,8 @@ public class HouseConnection implements Runnable {
 				e.printStackTrace();
 			}
 			
-			
-
 		}
-
+		
 		kill();
-
-		try {
-			socket.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-
 	}
 }

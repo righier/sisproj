@@ -1,7 +1,6 @@
 package server;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -83,7 +82,6 @@ public class Houses {
 					activeId = m.getId();
 					activeList = measures.get(activeId);
 				}
-				System.out.println(m +" "+activeList);
 				if (activeList == null) continue;
 				if (activeList.isEmpty() || m.compareTo(activeList.get(activeList.size()-1)) > 0) {
 					activeList.add(m);
@@ -112,6 +110,38 @@ public class Houses {
 			List<Measurement> list = new ArrayList<>();
 			measures.values().forEach(list::addAll);
 			return list;
+		}
+	}
+	
+	public static double getAverage(String id, int n) {
+		synchronized(measures) {
+			List<Measurement> list = measures.get(id);
+			if (list == null || list.size() == 0 || n == 0) return 0;
+			double sum = 0;
+			int count = 0;
+
+			for (int i = Math.max(0, list.size() - n); i < list.size(); i++) {
+				sum += list.get(i).getValue();
+				count++;
+			}
+			return sum / count;
+		}
+	}
+
+	public static double getSigma(String id, int n) {
+		synchronized(measures) {
+			List<Measurement> list = measures.get(id);
+			if (list == null || list.size() == 0 || n == 0) return 0;
+			double mean = getAverage(id, n);
+			double sum = 0;
+			int count = 0;
+			
+			for (int i = Math.max(0, list.size() - n); i < list.size(); i++) {
+				double temp = list.get(i).getValue() - mean;
+				sum += temp * temp;
+				count++;
+			}
+			return sum / count;
 		}
 	}
 }

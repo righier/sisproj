@@ -3,28 +3,24 @@ package server;
 import java.io.IOException;
 import java.net.BindException;
 import java.net.URI;
-import java.net.URISyntaxException;
 
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 
-public class ServerMain {
+import picocli.CommandLine;
+import picocli.CommandLine.Option;
 
+public class ServerMain implements Runnable {
+
+	@Option(names = {"-addr"}, description = "The address of this REST server")
 	public static String addr = "http://localhost:8000/";
 
-	/**
-	 * Starts Grizzly HTTP server exposing JAX-RS resources defined in this
-	 * application.
-	 * 
-	 * @return Grizzly HTTP server.
-	 */
 	public static HttpServer startServer() {
 		// create a resource config that scans for JAX-RS resources and providers
 		// in me.erre.sisdisper.energia package
 		final ResourceConfig rc = new ResourceConfig().packages("server.services");
 		rc.register(AppExceptionMapper.class);
-//		rc.register(new LoggingFeature(Logger.getLogger(LoggingFeature.DEFAULT_LOGGER_NAME), Level.FINEST, LoggingFeature.Verbosity.PAYLOAD_ANY, 10000));
 		
 		// create and start a new instance of grizzly http server
 		// exposing the Jersey application at BASE_URI
@@ -32,11 +28,10 @@ public class ServerMain {
 	}
 
 	public static void main(String args[]) {
-
-		String host = "localhost";
-		int port = 8000;
-
-		addr = "http://" + host + ":" + port + "/";
+		new CommandLine(new ServerMain()).execute(args);
+	}
+	
+	public void run() {
 
 		try {
 			System.out.println(addr);
@@ -46,7 +41,7 @@ public class ServerMain {
 			System.out.println(addr);
 			System.out.println("Hit return to stop...");
 			System.in.read();
-			server.stop();
+			server.shutdown();
 			System.out.println("Server stopped");
 		} catch (IllegalArgumentException e) {
 			System.err.println("Invalid hostname");
@@ -54,7 +49,6 @@ public class ServerMain {
 		} catch (BindException e) {
 			System.err.println("Port already in use");
 		} catch (IOException e) {
-
 			e.printStackTrace();
 		}
 	}

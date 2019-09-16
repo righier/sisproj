@@ -5,27 +5,6 @@ package proto;
 option java_package = "proto";
 option java_outer_classname = "HouseProto";
 
-service HouseService {
-
-	// called when a new node joins, returns the known measurements for every node
-	rpc JoinNetwork(Hello) returns (stream Measure) {};
-	
-	// the identifier matches the node leaving the network
-	rpc LeaveNetwork(Identifier) returns (Empty) {};
-	
-	// the node becomes the new master of the network
-	rpc NewMaster(Identifier) returns (Empty) {};
-	
-	// updates the values of all the outdated measurements
-	rpc SetMeasurements(stream Measure) returns (Empty) {};
-	
-	// ask for boost token
-	rpc AskBoost(BoostRequest) returns (BoostResponse) {};
-	
-	// ends boost for the identifier node
-	rpc EndBoost(Identifier) returns (Empty) {};
-}
-
 message Empty {}
 
 message Hello {
@@ -67,6 +46,8 @@ message Measure {
 message Welcome {}
 
 message Goodbye {}
+
+message GoodbyeAck {}
 
 message MeasureList {
 	repeated Measure measures = 1;

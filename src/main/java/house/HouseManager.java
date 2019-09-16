@@ -3,6 +3,7 @@ package house;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -10,11 +11,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 import com.google.protobuf.Any;
 
@@ -26,7 +22,7 @@ import proto.HouseProto.Measure;
 import proto.HouseProto.MeasureList;
 import simulator.SmartMeterSimulator;
 import utils.Async;
-import utils.ClientPool;
+import utils.Http;
 
 public class HouseManager {
 
@@ -53,18 +49,18 @@ public class HouseManager {
 	
 	private Map<String, Boolean> boostStatus;
 	private Set<String> pendingBoost;
-	private int currentBoostCount;
-	
 	
 	private SmartMeterSimulator sim;
+	private Http http;
 
-	public HouseManager(String localId) throws IOException {
-		this(localId, 0);
+	public HouseManager(String localId, Http http) throws IOException {
+		this(localId, 0, http);
 	}
 
-	public HouseManager(String localId, int port) throws IOException {
+	public HouseManager(String localId, int port, Http http) throws IOException {
 		this.localId = localId;
 		this.master = localId;
+		this.http = http;
 
 		measures.put(localId, new Measurement(localId, Double.NaN, 0));
 
@@ -77,10 +73,12 @@ public class HouseManager {
 		System.out.println("Listening on " + this.port);
 
 		Async.run(() -> {
-			while(true) {
+			while(!socket.isClosed()) {
 				try {
 					Socket conn = socket.accept();
 					new HouseConnection(this, conn);
+				} catch (SocketException e) {
+					
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -107,13 +105,7 @@ public class HouseManager {
 		}
 
 		Async.run(() -> {
-			Client client = ClientPool.get();
-			Response response = client
-				.target(ClientPool.getUrl())
-				.path("stats/add")
-				.request(MediaType.APPLICATION_JSON)
-				.post(Entity.entity(Arrays.asList(m), MediaType.APPLICATION_JSON));
-			ClientPool.add(client);
+			http.post("stats/add", Arrays.asList(m));
 		});
 
 	}
@@ -185,7 +177,6 @@ public class HouseManager {
 
 			double value = 0;
 			long timestamp = 0;
-			int count = 0;
 
 			List<Measurement> ms = getMeasurements();
 
@@ -195,7 +186,6 @@ public class HouseManager {
 
 				timestamp = Math.max(timestamp, m.getTimestamp());
 				value += m.getValue();
-				count++;
 
 				Measurement m2 = new Measurement(m.getId(), Double.NaN, m.getTimestamp());
 				measures.put(m2.getId(), m2);
@@ -204,19 +194,12 @@ public class HouseManager {
 			}
 			measureCount = 0;
 
-			value /= count;
-
 			List<Measurement> total = Arrays.asList(new Measurement("", value, timestamp));
 
 			Any msg = Any.pack(listBuilder.build());
 			Async.run(() -> {
 
-				Client client = ClientPool.get();
-				Response response = client.target(ClientPool.getUrl())
-						.path("stats/add")
-						.request(MediaType.APPLICATION_JSON)
-						.post(Entity.entity(total, MediaType.APPLICATION_JSON));
-				ClientPool.add(client);
+				http.post("stats/add", total);
 
 				for (HouseConnection conn: connections.values()) {
 					conn.write(msg);
@@ -231,14 +214,9 @@ public class HouseManager {
 		
 		sim.stopMeGently();
 
-		Client client = ClientPool.get();
-		Response response = client.target(ClientPool.getUrl())
-			.path("houses/remove/"+localId)
-			.request(MediaType.APPLICATION_JSON)
-			.delete();
-		ClientPool.add(client);
-
-		for (HouseConnection conn: connections.values()) {
+		http.delete("houses/remove/"+localId);
+		
+		for (HouseConnection conn: new ArrayList<>(connections.values())) {
 			Any msg = Any.pack(Goodbye.newBuilder().build());
 			conn.write(msg);
 			conn.kill();
@@ -249,6 +227,7 @@ public class HouseManager {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		
 	}
 
 	public synchronized boolean isMaster() {
@@ -286,7 +265,7 @@ public class HouseManager {
 	public synchronized void boost() {
 		if (boost > BOOST_INACTIVE) return;
 
-		System.out.println("I AM "+localId+" I WANT BOOST");
+		System.out.println("waiting for boost approval");
 		
 		boost = BOOST_REQUESTED;
 		boostTimestamp = System.currentTimeMillis();
@@ -304,6 +283,7 @@ public class HouseManager {
 			);
 		}
 		
+		canBoost();
 	}
 	
 	public synchronized void canBoost() {
@@ -317,33 +297,42 @@ public class HouseManager {
 		}
 		
 		if (count < 2) {
-			boost = BOOST_ACTIVE;
 			
 			Async.run(() -> {
-				try {
-					System.out.println("I AM "+localId+" BOOOOOST");
-					sim.boost();
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-				
-				System.out.println("I AM "+localId+" END BOOST :(");
+				System.out.println("boost started");
+				startBoost();
+					
+				System.out.println("boost ended");
 				stopBoost();
 			});
 			
 		}  else {
-			System.out.println("I AM "+localId+" too much boost "+count);
+			System.out.println("too many houses boosting, waiting");
 		}
 	}
 	
-	public synchronized void stopBoost() {
+	private void startBoost() {
+		boost = BOOST_ACTIVE;
+		
+		http.get("houses/boost/start/"+localId);
+		try {
+			sim.boost();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private synchronized void stopBoost() {
 		assert(boost == BOOST_ACTIVE);
 		
 		boost = BOOST_INACTIVE;
+		http.get("houses/boost/stop/"+localId);
 		
 		for (HouseConnection conn: connections.values()) {
 			conn.write(Any.pack(EndBoost.newBuilder().build()));
 		}
+		
+		
 	}
 	
 	public synchronized void setBoost(String id, boolean val) {

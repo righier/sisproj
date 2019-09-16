@@ -14,7 +14,7 @@ public class AppExceptionMapper implements ExceptionMapper<Exception> {
         return Response
 		        .status(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode())
 		        .type(MediaType.TEXT_PLAIN)
-		        .entity("Catching in ApplicaitonExceptionMapper : " + e.getMessage())
+		        .entity("Exception : " + e.getMessage())
 		        .build();
     }
 }

@@ -5,16 +5,15 @@ import javax.json.bind.annotation.JsonbProperty;
 import javax.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement
-public class IntegerCount {
-	private final int count;
+public class ValueWrapper {
+	private double value;
 	
 	@JsonbCreator
-	public IntegerCount(@JsonbProperty("count") int count) {
-		this.count = count;
+	public ValueWrapper(@JsonbProperty("value") double value) {
+		this.value = value;
 	}
 	
-	public int getCount() {
-		return count;
+	public double getValue() {
+		return value;
 	}
-
 }

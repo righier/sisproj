@@ -3,52 +3,60 @@ package house;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.Scanner;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import beans.House;
+import picocli.CommandLine;
+import picocli.CommandLine.Option;
 import simulator.Buffer;
 import simulator.SmartMeterSimulator;
-import utils.ClientPool;
+import utils.Generator;
+import utils.Http;
 
-public class CasaMain {
+public class CasaMain implements Runnable {
 
-	public static String randomId() {
-		String alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
-		StringBuilder builder = new StringBuilder();
-		Random r = new Random();
-		for (int i = 0; i < 10; i++) {
-			builder.append(alpha.charAt(r.nextInt(alpha.length())));
-		}
-		return builder.toString();
-	}
+	@Option(names = {"-id"}, description = "The string id of this node")
+	private String id = Generator.randomId();
 	
-	public static HouseManager init(String id, String addr, int port, boolean simulator) {
-		
-		ClientPool.init(addr);
+	@Option(names = {"-ip"}, description = "The ip address of this node")
+	private String ip = "localhost";
+	
+	@Option(names = {"-port"}, description = "The port of this node")
+	private int port = 0;
+
+	@Option(names = {"-server"}, description = "The uri of the REST server")
+	private String serverAddr = "http://localhost:8000";
+
+	@Option(names = {"-simulator"}, description = "The uri of the REST server")
+	private boolean enableSimulator = true;
+
+	public static void main(String args[]) {	
+		new CommandLine(new CasaMain()).execute();
+	}
+
+	public HouseManager init(String id, String ip, String addr, int port, boolean simulator) {
+
+		System.out.println(addr);
+		Http http = new Http(addr);
 
 		HouseManager houseManager;
 		try {
-			houseManager = new HouseManager(id, port);
+			houseManager = new HouseManager(id, port, http);
 		} catch (IOException e1) {
 			e1.printStackTrace();
 			return null;
 		}
 
-		House house = new House(id, "localhost", houseManager.getPort());
+		House house = new House(id, ip, houseManager.getPort());
 
-		Client client = ClientPool.get();
-		Response response = client.target(ClientPool.getUrl())
-			.path("houses/add")
-			.request(MediaType.APPLICATION_JSON)
-			.put(Entity.entity(house, MediaType.APPLICATION_JSON));
-		ClientPool.add(client);
+		Response response = http.post("houses/add", house);
+
+		if (response == null) {
+			System.exit(1);
+		}
 
 		int status = response.getStatus();
 		if (status == 200) {
@@ -69,6 +77,8 @@ public class CasaMain {
 			}
 
 			houseManager.setReady(true);
+		} else {
+			System.exit(1);
 		}
 
 		SmartMeterBuffer buffer = new SmartMeterBuffer(houseManager);
@@ -79,19 +89,13 @@ public class CasaMain {
 		}
 		
 		houseManager.setSimultor(meter);
-
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			meter.stopMeGently();
-			System.out.println(id+" exit");
-			System.exit(0);
-		}));
 		
 		return houseManager;
 	}
 
-	public static void main(String args[]) {
+	public void run() {
 
-		HouseManager manager = init(CasaMain.randomId(), "http://localhost:8000", 0, true);
+		HouseManager manager = init(id, ip, serverAddr, port, enableSimulator);
 
 		boolean running = true;
 		Scanner in = new Scanner(System.in);
@@ -112,5 +116,6 @@ public class CasaMain {
 
 			}
 		}
+		in.close();
 	}
 }
