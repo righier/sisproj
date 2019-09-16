@@ -1,6 +1,5 @@
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 
 import org.junit.Test;
@@ -18,15 +17,9 @@ public class AsyncTest {
 		
 		final int n = 100;
 		
-		ArrayList<Integer> nums = new ArrayList<>();
-		
-		for (int i = 0; i < n; i++) {
-			nums.add(new Integer(i));
-		}
-		
 		WorkerPool async = new WorkerPool(20);
 		
-		for (Integer i: nums) {
+		for (int i = 0; i < n; i++) {
 			async.run(() -> {
 				assertTrue(Thread.currentThread() instanceof Worker);
 				synchronized(ids) {

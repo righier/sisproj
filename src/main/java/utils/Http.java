@@ -55,7 +55,7 @@ public class Http {
 		}
 	}
 
-	public <T> Response get(String path, T payload) {
+	public <T> Response get(String path) {
 		try (Managed c = new Managed(this)) {
 			return c.init().path(path).request(json).get();
 		} catch (Exception e) {
@@ -63,7 +63,7 @@ public class Http {
 		}
 	}
 	
-	public <T> Response head(String path, T payload) {
+	public <T> Response head(String path) {
 		try (Managed c = new Managed(this)) {
 			return c.init().path(path).request(json).head();
 		} catch (Exception e) {

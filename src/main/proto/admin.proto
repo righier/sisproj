@@ -1,0 +1,15 @@
+
+syntax = "proto3";
+package proto;
+
+option java_package = "proto";
+option java_outer_classname = "AdminProto";
+
+import "house.proto";
+
+service AdminService {
+	rpc NotifyHouseJoined(Identifier) returns (Empty) {};
+	rpc NotifyHouseLeft(Identifier) returns (Empty) {};
+	rpc NotifyBoostStart(Identifier) returns (Empty) {};
+	rpc NotifyBoostStop(Identifier) returns (Empty) {};
+}

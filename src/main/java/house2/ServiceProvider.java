@@ -27,7 +27,9 @@ public class ServiceProvider extends HouseServiceImplBase {
 				response.onNext(m.toProtobuf());
 			}
 		}
+		System.out.println("before complete");
 		response.onCompleted();
+		System.out.println("after complete");
 	}
 
 	@Override
@@ -51,14 +53,15 @@ public class ServiceProvider extends HouseServiceImplBase {
 
 	@Override
 	public void askBoost(BoostRequest request, StreamObserver<BoostResponse> response) {
-		// TODO Auto-generated method stub
-		super.askBoost(request, response);
+		boolean grant = manager.canGrantBoost(request.getId(), request.getTimestamp());
+		response.onNext(BoostResponse.newBuilder().setId(manager.getId()).setGrant(grant).build());
+		response.onCompleted();
 	}
 
 	@Override
 	public void endBoost(Identifier request, StreamObserver<Empty> response) {
-		// TODO Auto-generated method stub
-		super.endBoost(request, response);
+		manager.setBoost(request.getId(), true);
+		response.onCompleted();
 	}
 
 }

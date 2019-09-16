@@ -34,4 +34,8 @@ public class House implements Comparable<House> {
 		return this.id.compareTo(h.id);
 	}
 
+	@Override
+	public String toString() {
+		return id+" "+addr+":"+port;
+	}
 }

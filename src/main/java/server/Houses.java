@@ -113,4 +113,36 @@ public class Houses {
 			return list;
 		}
 	}
+	
+	public static double getAverage(String id, int n) {
+		synchronized(measures) {
+			List<Measurement> list = measures.get(id);
+			if (list == null || list.size() == 0 || n == 0) return 0;
+			double sum = 0;
+			int count = 0;
+
+			for (int i = Math.max(0, list.size() - n); i < list.size(); i++) {
+				sum += list.get(i).getValue();
+				count++;
+			}
+			return sum / count;
+		}
+	}
+
+	public static double getSigma(String id, int n) {
+		synchronized(measures) {
+			List<Measurement> list = measures.get(id);
+			if (list == null || list.size() == 0 || n == 0) return 0;
+			double mean = getAverage(id, n);
+			double sum = 0;
+			int count = 0;
+			
+			for (int i = Math.max(0, list.size() - n); i < list.size(); i++) {
+				double temp = list.get(i).getValue() - mean;
+				sum += temp * temp;
+				count++;
+			}
+			return sum / count;
+		}
+	}
 }

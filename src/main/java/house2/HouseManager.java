@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
@@ -18,11 +20,15 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import proto.HouseServiceGrpc;
+import proto.HouseProto.BoostRequest;
+import proto.HouseProto.BoostResponse;
 import proto.HouseProto.Empty;
 import proto.HouseProto.Hello;
 import proto.HouseProto.Identifier;
 import proto.HouseProto.MasterResponse;
 import proto.HouseProto.Measure;
+import proto.HouseServiceGrpc.HouseServiceStub;
 import simulator.Buffer;
 import simulator.SmartMeterSimulator;
 import utils.WorkerPool;
@@ -51,6 +57,16 @@ public class HouseManager {
 	private boolean stopping = false;
 
 	private int measureCount = 0;
+	
+	public static final int BOOST_INACTIVE = 0;
+	public static final int BOOST_REQUESTED = 2;
+	public static final int BOOST_ACTIVE = 3;
+
+	private int boost = 0;
+	private long boostTimestamp = 0;
+
+	private Map<String, Boolean> boostGrant = new HashMap<>();
+	private Set<String> pendingBoost = new HashSet<>();
 
 	public HouseManager(String id, String ip, int port, String serverAddr, boolean runSimulator) {
 		this.id = id;
@@ -63,6 +79,7 @@ public class HouseManager {
 		// start listening for incoming connections
 		provider = new ServiceProvider(this);
 		listener = ServerBuilder.forPort(port).addService(provider).build();
+		
 		try {
 			listener.start();
 			System.out.println("Started listening for connections");
@@ -81,10 +98,15 @@ public class HouseManager {
 		
 		if (r.getStatus() == 200) {
 			
+			System.out.println("registered to network, id:" + getId());
+			
 			List<House> houses = r.readEntity(new GenericType<List<House>>() {});
+
 			
 			List<HouseChannel> anchestors = new ArrayList<>();
 			for (House h: houses) {
+				if (h.getId().equals(getId())) continue;
+				System.out.println("hello to "+h.getId());
 				HouseChannel c = new HouseChannel(h);
 				anchestors.add(c);
 				channels.put(h.getId(), c);
@@ -95,18 +117,28 @@ public class HouseManager {
 			if (!anchestors.isEmpty()) {
 				Barrier b = new Barrier();
 				for (HouseChannel c: anchestors) {
-					b.add(async.run(() -> {
-						Iterator<Measure> it = c.blocking().joinNetwork(Hello.newBuilder()
-								.setId(this.id)
-								.setAddress(this.ip)
-								.setPort(this.port)
-								.build());
+						try {
+							HouseServiceGrpc.newStub(c.getChannel()).joinNetwork(
+									Hello.newBuilder()
+									.setId(this.id)
+									.setAddress(this.ip)
+									.setPort(this.port)
+									.build(), 
+									StreamHelper.simple(
+										(m) -> new Measurement(m), 
+										(t) -> {
+											System.out.println("ERRORE DI OPORCO");
+											t.printStackTrace();
+										}, 
+										() -> System.out.println("completed")
+									)
+								);
 						
-						if (it.hasNext()) {
-							while(it.hasNext()) update(new Measurement(it.next()));
-						} else offline.push(c.getId());
+						} catch(StatusRuntimeException e) {
+							System.out.println("offline: "+c.getId());
+							offline.push(c.getId());
+						}
 					
-					}));
 				}
 				b.await();
 			}
@@ -116,9 +148,9 @@ public class HouseManager {
 			while(offline.size() > 0) {
 				removeHouse(offline.pop());
 			}
-
+			
 			master = tmaster;
-		
+			System.out.println("master: "+master);
 			
 		} else {
 			System.err.println(r.getStatusInfo());
@@ -134,6 +166,9 @@ public class HouseManager {
 			System.out.println("Started simulator");
 		}
 
+		while(true) {
+			
+		}
 	}
 
 	public synchronized boolean isMaster() {
@@ -159,8 +194,10 @@ public class HouseManager {
 	public void newLocalMeasurement(Measurement m) {
 		update(m);
 
+		/*
 		// sends measurement to every node
 		for (HouseChannel channel: getChannels()) {
+			System.out.println(channel.getId());
 			async.run(() -> {
 				StreamObserver<Measure> s = channel.async().setMeasurements(StreamHelper.ignore());
 				s.onNext(m.toProtobuf());
@@ -172,6 +209,7 @@ public class HouseManager {
 		async.run(() -> {
 			http.post("stats/add", Arrays.asList(m));
 		});
+		*/
 	}
 
 	public synchronized void addHouse(HouseChannel c) {
@@ -190,6 +228,10 @@ public class HouseManager {
 		}
 
 		sendSum();
+
+		pendingBoost.remove(id);
+		boostGrant.remove(id);
+		canBoost();
 	}
 	
 	public void update(Measure m) {
@@ -289,6 +331,9 @@ public class HouseManager {
 		}
 
 		//TODO what to do if you have boost?
+		if (isBoostActive()) {
+			
+		}
 
 		async.waitAllIdle();
 
@@ -316,10 +361,100 @@ public class HouseManager {
 			} catch (InterruptedException e) {}
 		}
 	}
+	
+	public synchronized long getBoostTimestamp() {
+		return boostTimestamp;
+	}
 
-	public void boost() {
-		// TODO Auto-generated method stub
+	public synchronized boolean isBoostActive() {
+		return boost == BOOST_ACTIVE;
+	}
+
+	public synchronized int getBoostStatus() {
+		return boost;
+	}
+
+	public synchronized void boost() {
+		if (boost != BOOST_INACTIVE) return;
 		
+		pendingBoost.clear();
+		boostGrant.clear();
+		
+		boost = BOOST_REQUESTED;
+		boostTimestamp = System.currentTimeMillis();
+
+		for (HouseChannel c: channels.values()) {
+			boostGrant.put(c.getId(), false);
+			pendingBoost.add(c.getId());
+			c.async().askBoost(BoostRequest.newBuilder().setId(id).setTimestamp(boostTimestamp).build(), StreamHelper.simple(
+					(BoostResponse r) -> setBoost(r.getId(), r.getGrant()), 
+					StreamHelper.logError, 
+					() -> {}
+				));
+		}
+		
+	}
+	
+	public synchronized void canBoost() {
+		if (boost != BOOST_REQUESTED) return;
+
+		if (!pendingBoost.isEmpty()) return;
+
+		int count = 0;
+		for (Boolean active: boostGrant.values()) {
+			if (!active) count++;
+		}
+
+		if (count < 2) {
+			boost = BOOST_ACTIVE;
+
+			async.run(() -> {
+				System.out.println("I AM "+id+" BOOOOOST");
+				startBoost();
+
+				System.out.println("I AM "+id+" END BOOST :(");
+				stopBoost();
+			});
+
+		}  else {
+			System.out.println("I AM "+id+" too much boost "+count);
+		}
+	}
+	
+	public synchronized void startBoost() {
+		try {
+			simulator.boost();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public synchronized void stopBoost() {
+		assert(boost == BOOST_ACTIVE);
+
+		boost = BOOST_INACTIVE;
+		
+		for (HouseChannel c: channels.values()) {
+			c.async().endBoost(Identifier.newBuilder().setId(id).build(), StreamHelper.ignore());
+		}
+
+	}
+
+	public synchronized void setBoost(String id, boolean grant) {
+		if (boost != BOOST_REQUESTED) return;
+
+		pendingBoost.remove(id);
+		boostGrant.put(id, grant);
+
+		canBoost();
+	}
+
+	public synchronized boolean canGrantBoost(String id, long timestamp) {
+		if (boost == BOOST_ACTIVE) return false;
+		if (boost == BOOST_INACTIVE) return true;
+		if (boostTimestamp < timestamp) return true;
+		if (boostTimestamp > timestamp) return false;
+		return this.id.compareTo(id) > 0; // if two houses requested boost in the same millisecond the smaller id goes first
 	}
 
 }

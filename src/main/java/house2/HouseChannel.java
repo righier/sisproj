@@ -30,6 +30,10 @@ public class HouseChannel {
 		return id;
 	}
 	
+	public ManagedChannel getChannel() {
+		return channel;
+	}
+	
 	public HouseServiceStub async() {
 		return async;
 	}

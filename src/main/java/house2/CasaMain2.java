@@ -5,7 +5,7 @@ import java.util.Scanner;
 import house2.HouseManager;
 import utils.Generator;
 
-public class CasaMain {
+public class CasaMain2 {
 
 	public static HouseManager init(String id, String serverAddr, String ip, int port, boolean simulator) {
 
